@@ -31,7 +31,60 @@ function save(){const h=hotel();if(!h||!workspaceId)return;const payload={ticket
 function hotel(){return db.hotels.find(h=>h.id===current)}function toast(msg){const r=document.getElementById('toastRoot');r.innerHTML=`<div class="toast">${esc(msg)}</div>`;setTimeout(()=>r.innerHTML='',3200)}
 function renderTenantOptions(){const sel=document.getElementById('tenantSelect');if(sel)sel.innerHTML=db.hotels.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('')}
 function showAuth(message=''){document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');document.getElementById('authEmail').closest('.field').classList.remove('hidden');document.getElementById('authPassword').closest('.field').classList.remove('hidden');document.getElementById('authEmail').required=true;document.getElementById('authPassword').required=true;document.getElementById('workspaceField').classList.add('hidden');document.getElementById('workspaceName').required=false;document.getElementById('toggleAuth').classList.remove('hidden');document.getElementById('forgotPassword').classList.remove('hidden');if(message)document.getElementById('authMessage').textContent=message}
+
 async function loadWorkspace(){
+ const {data:members,error:me}=await sb.from('hotelcare_memberships').select('workspace_id,role').order('created_at');
+
+ if(me)throw me;
+
+ if(!members||!members.length){
+  showAuth('Conta criada. Indique o nome do hotel para criar o seu espaço privado.');
+  document.getElementById('authEmail').closest('.field').classList.add('hidden');
+  document.getElementById('authPassword').closest('.field').classList.add('hidden');
+  document.getElementById('authEmail').required=false;
+  document.getElementById('authPassword').required=false;
+  document.getElementById('workspaceField').classList.remove('hidden');
+  document.getElementById('workspaceName').required=true;
+  authMode='workspace';
+  document.getElementById('authTitle').textContent='Criar espaço do hotel';
+  document.getElementById('authIntro').textContent='Associe a sua conta ao primeiro hotel.';
+  document.getElementById('authSubmit').textContent='Criar espaço';
+  document.getElementById('toggleAuth').classList.add('hidden');
+  document.getElementById('forgotPassword').classList.add('hidden');
+  return;
+ }
+
+ workspaceId=members[0].workspace_id;
+
+ const {data:w,error:we}=await sb.from('hotelcare_workspaces').select('id,name').eq('id',workspaceId).single();
+ if(we)throw we;
+
+ const {data:d,error:de}=await sb.from('hotelcare_data').select('payload').eq('workspace_id',workspaceId).maybeSingle();
+ if(de)throw de;
+
+ const {data:s,error:se}=await sb.from('hotelcare_subscriptions')
+  .select('plan,status,trial_start,trial_end,current_period_start,current_period_end,cancel_at_period_end')
+  .eq('workspace_id',workspaceId)
+  .maybeSingle();
+
+ if(se)throw se;
+
+ if(!s)throw new Error('Não foi encontrada uma subscrição para este hotel.');
+
+ window.hotelcareSubscription=s;
+
+ const p=d?.payload||{};
+ db={hotels:[{...emptyWorkspace(w.id,w.name),...p,id:w.id,name:w.name}]};
+ current=w.id;
+
+ document.getElementById('login').classList.add('hidden');
+ document.getElementById('app').classList.remove('hidden');
+ document.getElementById('userLabel').textContent=session?.user?.email||'Utilizador';
+ document.getElementById('hotelCrumb').textContent=w.name;
+
+ render();
+}
+
  const {data:members,error:me}=await sb.from('hotelcare_memberships').select('workspace_id,role').order('created_at');
  if(me)throw me;
  if(!members||!members.length){showAuth('Conta criada. Indique o nome do hotel para criar o seu espaço privado.');document.getElementById('authEmail').closest('.field').classList.add('hidden');document.getElementById('authPassword').closest('.field').classList.add('hidden');document.getElementById('authEmail').required=false;document.getElementById('authPassword').required=false;document.getElementById('workspaceField').classList.remove('hidden');document.getElementById('workspaceName').required=true;authMode='workspace';document.getElementById('authTitle').textContent='Criar espaço do hotel';document.getElementById('authIntro').textContent='Associe a sua conta ao primeiro hotel.';document.getElementById('authSubmit').textContent='Criar espaço';document.getElementById('toggleAuth').classList.add('hidden');document.getElementById('forgotPassword').classList.add('hidden');return}
