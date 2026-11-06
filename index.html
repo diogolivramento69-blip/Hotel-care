@@ -98,6 +98,74 @@ document.getElementById('authForm').addEventListener('submit',async e=>{e.preven
 document.getElementById('forgotPassword').onclick=async()=>{const email=document.getElementById('authEmail').value.trim();if(!email){document.getElementById('authMessage').textContent='Introduza primeiro o seu email.';return}const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin});document.getElementById('authMessage').textContent=error?error.message:'Se existir uma conta para este email, receberá uma mensagem para redefinir a palavra-passe.'};
 document.getElementById('logout').onclick=async e=>{e.preventDefault();await sb.auth.signOut();session=null;workspaceId=null;db={hotels:[]};current='';showAuth('Sessão terminada.')};
 sb.auth.onAuthStateChange(async(event,s)=>{session=s;if(event==='PASSWORD_RECOVERY'){authMode='update';showAuth('Defina uma nova palavra-passe.');document.getElementById('authTitle').textContent='Nova palavra-passe';document.getElementById('authIntro').textContent='Escolha uma palavra-passe com pelo menos 8 caracteres.';document.getElementById('authSubmit').textContent='Atualizar palavra-passe';document.getElementById('toggleAuth').classList.add('hidden');document.getElementById('forgotPassword').classList.add('hidden');}else if(event==='SIGNED_IN'){try{await loadWorkspace()}catch(e){console.error(e);showAuth(e.message)}}});
-load();
+async function generateMonthlyReport(){
+ const h=hotel();
+ if(!h||!workspaceId||!session?.user?.id){
+  toast('Não foi possível identificar o hotel ou a conta.');
+  return;
+ }
+ const now=new Date();
+ const start=new Date(now.getFullYear(),now.getMonth(),1);
+ const end=new Date(now.getFullYear(),now.getMonth()+1,0);
+ const periodStart=start.toISOString().slice(0,10);
+ const periodEnd=end.toISOString().slice(0,10);
+ const monthLabel=start.toLocaleDateString('pt-PT',{month:'long',year:'numeric'});
+ const reportData={
+  hotel:h.name,
+  generated_at:now.toISOString(),
+  period_start:periodStart,
+  period_end:periodEnd,
+  tickets:h.tickets||[],
+  equipment:h.equipment||[],
+  preventive:h.preventive||[],
+  pools:h.pools||[],
+  team:h.team||[]
+ };
+ const {error}=await sb.from('hotelcare_generated_reports').insert({
+  workspace_id:workspaceId,
+  title:'Relatório mensal — '+h.name+' — '+monthLabel,
+  report_type:'monthly',
+  period_start:periodStart,
+  period_end:periodEnd,
+  generation_mode:'manual',
+  report_data:reportData,
+  generated_by:session.user.id
+ });
+ if(error){
+  console.error(error);
+  toast('Erro ao guardar relatório: '+error.message);
+  return;
+ }
+ toast('Relatório guardado com sucesso!');
+ await loadGeneratedReports();
+}
+ async function loadGeneratedReports(){
+ const box=document.getElementById('generatedReports');
+ if(!box||!workspaceId)return;
+
+ box.innerHTML='<div class="empty">A carregar relatórios...</div>';
+
+ const {data,error}=await sb.from('hotelcare_generated_reports')
+ .select('id,title,report_type,period_start,period_end,generation_mode,created_at')
+ .eq('workspace_id',workspaceId)
+ .order('created_at',{ascending:false})
+ .limit(12);
+
+ if(error){
+  console.error(error);
+  box.innerHTML='<div class="empty">Erro ao carregar histórico.</div>';
+  return;
+ }
+
+ if(!data||!data.length){
+  box.innerHTML='<div class="empty">Ainda não existem relatórios.</div>';
+  return;
+ }
+
+ box.innerHTML='<div class="table-wrap"><table><thead><tr><th>Relatório</th><th>Período</th><th>Modo</th><th>Data</th></tr></thead><tbody>'+
+ data.map(r=>'<tr><td>'+esc(r.title)+'</td><td>'+fmt(r.period_start)+' a '+fmt(r.period_end)+'</td><td>'+(r.generation_mode==='automatic'?'Automático':'Manual')+'</td><td>'+new Date(r.created_at).toLocaleDateString('pt-PT')+'</td></tr>').join('')+
+ '</tbody></table></div>';
+}
+ load();
 </script>
 </body></html>
