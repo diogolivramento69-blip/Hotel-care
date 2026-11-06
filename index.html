@@ -34,6 +34,45 @@ function showAuth(message=''){document.getElementById('app').classList.add('hidd
 
 async function loadWorkspace(){
  const {data:members,error:me}=await sb.from('hotelcare_memberships').select('workspace_id,role').order('created_at');
+ if(me)throw me;
+
+ if(!members||!members.length){
+  showAuth('Conta criada. Indique o nome do hotel para criar o seu espaço privado.');
+  document.getElementById('authEmail').closest('.field').classList.add('hidden');
+  document.getElementById('authPassword').closest('.field').classList.add('hidden');
+  document.getElementById('authEmail').required=false;
+  document.getElementById('authPassword').required=false;
+  document.getElementById('workspaceField').classList.remove('hidden');
+  document.getElementById('workspaceName').required=true;
+  authMode='workspace';
+  document.getElementById('authTitle').textContent='Criar espaço do hotel';
+  document.getElementById('authIntro').textContent='Associe a sua conta ao primeiro hotel.';
+  document.getElementById('authSubmit').textContent='Criar espaço';
+  document.getElementById('toggleAuth').classList.add('hidden');
+  document.getElementById('forgotPassword').classList.add('hidden');
+  return;
+ }
+
+ workspaceId=members[0].workspace_id;
+
+ const {data:w,error:we}=await sb.from('hotelcare_workspaces').select('id,name').eq('id',workspaceId).single();
+ if(we)throw we;
+
+ const {data:d,error:de}=await sb.from('hotelcare_data').select('payload').eq('workspace_id',workspaceId).maybeSingle();
+ if(de)throw de;
+
+ const p=d?.payload||{};
+ db={hotels:[{...emptyWorkspace(w.id,w.name),...p,id:w.id,name:w.name}]};
+ current=w.id;
+
+ document.getElementById('login').classList.add('hidden');
+ document.getElementById('app').classList.remove('hidden');
+ document.getElementById('userLabel').textContent=session?.user?.email||'Utilizador';
+ document.getElementById('hotelCrumb').textContent=w.name;
+ render();
+}
+
+ const {data:members,error:me}=await sb.from('hotelcare_memberships').select('workspace_id,role').order('created_at');
 
  if(me)throw me;
 
