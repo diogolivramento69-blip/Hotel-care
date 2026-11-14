@@ -83,16 +83,156 @@ else if(page==='equipment'){c.innerHTML=head('Equipamentos','Inventário técnic
 else if(page==='preventive'){c.innerHTML=head('Manutenção preventiva','Planeie tarefas recorrentes e acompanhe os prazos.',`<button class="btn primary" onclick="openPreventive()">＋ Nova tarefa</button>`)+`<div class="panel"><div class="table-wrap"><table><thead><tr><th>Tarefa</th><th>Equipamento</th><th>Periodicidade</th><th>Próxima data</th><th>Responsável</th><th>Estado</th><th></th></tr></thead><tbody>${h.preventive.map(x=>`<tr><td><strong>${esc(x.title)}</strong></td><td>${esc(x.equipment)}</td><td>${esc(x.frequency)}</td><td>${fmt(x.due)}</td><td>${esc(x.assignee||'—')}</td><td>${badge(x.status)}</td><td><button class="btn secondary" onclick="togglePreventive('${x.id}')">${x.status==='Concluída'?'Reabrir':'Concluir'}</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">Sem tarefas preventivas.</td></tr>'}</tbody></table></div></div>`}
 else if(page==='pools'){c.innerHTML=head('Piscinas e qualidade da água','Registe medições e consulte os últimos valores introduzidos.',`<button class="btn primary" onclick="openPool()">＋ Registar medição</button>`)+`<div class="pool-grid">${h.pools.map(x=>`<div class="pool-card"><h4>${esc(x.name)}</h4><small>${esc(x.location)} · Registo ${fmt(x.date)}</small><div class="pool-values"><div><b>${esc(x.ph)}</b><span>pH</span></div><div><b>${esc(x.chlorine)} mg/L</b><span>Cloro livre</span></div><div><b>${esc(x.temp)}°</b><span>Temperatura</span></div></div><button class="btn secondary" onclick="editPool('${x.id}')">Editar último registo</button></div>`).join('')||'<div class="empty">Ainda não existem registos.</div>'}</div><div class="notice" style="margin-top:16px">Os valores apresentados são registos introduzidos pelo utilizador e não constituem validação automática de conformidade. Confirme sempre os limites aplicáveis à instalação e à legislação em vigor.</div><div class="panel" style="margin-top:15px"><div class="panel-head"><h3>Histórico de medições</h3><span>${h.pools.length} registos de referência</span></div><div class="table-wrap"><table><thead><tr><th>Piscina</th><th>Data</th><th>pH</th><th>Cloro livre (mg/L)</th><th>Temperatura</th></tr></thead><tbody>${h.pools.map(x=>`<tr><td>${esc(x.name)}</td><td>${fmt(x.date)}</td><td>${esc(x.ph)}</td><td>${esc(x.chlorine)}</td><td>${esc(x.temp)} °C</td></tr>`).join('')}</tbody></table></div></div>`}
 else if(page==='team'){c.innerHTML=head('Equipa técnica','Pessoas que podem ser atribuídas a tarefas e intervenções.',`<button class="btn primary" onclick="openTeam()">＋ Adicionar elemento</button>`)+`<div class="panel"><div class="table-wrap"><table><thead><tr><th>Nome</th><th>Função</th><th>Email</th><th></th></tr></thead><tbody>${h.team.map(x=>`<tr><td><strong>${esc(x.name)}</strong></td><td>${esc(x.role)}</td><td>${esc(x.email||'—')}</td><td><button class="btn secondary" onclick="editTeam('${x.id}')">Editar</button></td></tr>`).join('')||'<tr><td colspan="4" class="empty">Sem elementos na equipa.</td></tr>'}</tbody></table></div></div>`}
-else if(page==='reports'){
-c.innerHTML=head('Relatórios e exportação','Gere relatórios e consulte o histórico.',`<button class="btn primary" onclick="generateMonthlyReport()">＋ Gerar relatório mensal</button>`)+`
-<div class="report-grid">
-<div class="report-card"><h3>Relatório de avarias</h3><p>Ocorrências e estados.</p><button class="btn secondary" onclick="exportCSV('tickets')">Exportar CSV</button></div>
-<div class="report-card"><h3>Equipamentos</h3><p>Inventário de equipamentos.</p><button class="btn secondary" onclick="exportCSV('equipment')">Exportar CSV</button></div>
-<div class="report-card"><h3>Manutenção preventiva</h3><p>Plano de tarefas.</p><button class="btn secondary" onclick="exportCSV('preventive')">Exportar CSV</button></div>
-<div class="report-card"><h3>Piscinas</h3><p>Registos de qualidade da água.</p><button class="btn secondary" onclick="exportCSV('pools')">Exportar CSV</button></div>
-<div class="report-card"><h3>Equipa</h3><p>Elementos e funções.</p><button class="btn secondary" onclick="exportCSV('team')">Exportar CSV</button></div>
-<div class="report-card"><h3>Resumo imprimível</h3><p>Guardar em PDF.</p><button class="btn secondary" onclick="window.print()">Imprimir / PDF</button></div>
-</div>
+
+function exportReportPDF(type){
+
+if(!window.jspdf){
+toast('Biblioteca PDF não carregada. Verifique a ligação à internet.');
+return;
+}
+
+const h=hotel();
+if(!h)return;
+
+const {jsPDF}=window.jspdf;
+const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+
+const configs={
+tickets:{
+title:'Relatório de avarias',
+headers:['Avaria','Área','Prioridade','Estado','Responsável','Data'],
+data:(h.tickets||[]).map(x=>[
+x.title,x.area,x.priority,x.status,x.assignee,fmt(x.date)
+])
+},
+equipment:{
+title:'Inventário de equipamentos',
+headers:['Equipamento','Código','Categoria','Localização','Estado','Última intervenção'],
+data:(h.equipment||[]).map(x=>[
+x.name,x.code,x.category,x.location,x.status,fmt(x.last)
+])
+},
+preventive:{
+title:'Plano de manutenção preventiva',
+headers:['Tarefa','Equipamento','Periodicidade','Próxima data','Responsável','Estado'],
+data:(h.preventive||[]).map(x=>[
+x.title,x.equipment,x.frequency,fmt(x.due),x.assignee,x.status
+])
+},
+pools:{
+title:'Relatório de piscinas e águas',
+headers:['Piscina','Localização','pH','Cloro livre','Temperatura','Data'],
+data:(h.pools||[]).map(x=>[
+x.name,x.location,x.ph,x.chlorine+' mg/L',x.temp+' °C',fmt(x.date)
+])
+},
+team:{
+title:'Relatório da equipa',
+headers:['Nome','Função','Email'],
+data:(h.team||[]).map(x=>[
+x.name,x.role,x.email
+])
+}
+};
+
+if(type==='summary'){
+const t=h.tickets||[];
+const p=h.preventive||[];
+const a=h.equipment||[];
+const w=h.pools||[];
+
+configs.summary={
+title:'Resumo geral de manutenção',
+headers:['Indicador','Resultado'],
+data:[
+['Total de avarias',t.length],
+['Avarias concluídas',t.filter(x=>x.status==='Concluída').length],
+['Avarias pendentes',t.filter(x=>x.status!=='Concluída').length],
+['Equipamentos registados',a.length],
+['Tarefas preventivas',p.length],
+['Preventivas concluídas',p.filter(x=>x.status==='Concluída').length],
+['Registos de piscinas',w.length]
+]
+};
+}
+
+const config=configs[type];
+if(!config)return;
+
+const now=new Date();
+const dataHora=now.toLocaleString('pt-PT');
+
+doc.setProperties({
+title:config.title+' - '+h.name,
+subject:'Relatório de manutenção HotelCare',
+author:'HotelCare',
+creator:'HotelCare'
+});
+
+doc.setFillColor(16,36,58);
+doc.rect(0,0,297,34,'F');
+
+doc.setTextColor(255,255,255);
+doc.setFontSize(21);
+doc.text('HotelCare',14,15);
+
+doc.setFontSize(11);
+doc.text(config.title,14,24);
+
+doc.setTextColor(40,55,70);
+doc.setFontSize(11);
+doc.text('Unidade: '+h.name,14,44);
+
+doc.setFontSize(9);
+doc.text('Emitido em: '+dataHora,14,51);
+
+doc.autoTable({
+startY:60,
+head:[config.headers],
+body:config.data.length?config.data:[['Sem registos disponíveis']],
+theme:'grid',
+styles:{
+font:'helvetica',
+fontSize:8,
+cellPadding:3,
+overflow:'linebreak'
+},
+headStyles:{
+fillColor:[25,168,154],
+textColor:255,
+fontStyle:'bold'
+},
+alternateRowStyles:{
+fillColor:[244,247,249]
+},
+margin:{left:14,right:14,bottom:20},
+didDrawPage:function(){
+const page=doc.internal.getNumberOfPages();
+doc.setFontSize(8);
+doc.setTextColor(120);
+doc.text(
+'HotelCare | Documento de manutenção',
+14,
+200
+);
+doc.text(
+'Página '+page,
+280,
+200,
+{align:'right'}
+);
+}
+});
+
+const safeName=type.replace(/[^a-z0-9_-]/gi,'-');
+
+doc.save(
+'hotelcare-'+safeName+'-'+now.toISOString().slice(0,10)+'.pdf'
+);
+
+toast('Relatório PDF gerado com sucesso.');
+}
+
 <section class="panel" style="margin-top:18px">
 <div class="panel-head"><h3>Histórico de relatórios</h3></div>
 <div id="generatedReports"><div class="empty">A carregar relatórios...</div></div>
